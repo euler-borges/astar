@@ -166,21 +166,36 @@ function doGUI() {
 
 var gamemap;
 var uiElements = [];
-var paused = true;
-var pathfinder;
+var paused = false;
+var pathfinder = [];
 var status = "";
 var stepsAllowed = 0;
 var runPauseButton;
+var requiredsteps = [];
 
+//MODIFICAÇÕES PARA MÚLTIPLOS OBJETIVOS AQUI
 function initaliseSearchExample(rows, cols) {
     mapGraphic = null;
     gamemap = new MapFactory().getMap(cols, rows, 10, 10, 410, 410, allowDiagonals, percentWalls);
-    start = gamemap.grid[0][0];
-    end = gamemap.grid[cols - 1][rows - 1];
-    start.wall = false;
-    end.wall = false;
+    requiredsteps[0] = gamemap.grid[0][0];
+    requiredsteps[1] = gamemap.grid[Math.round(cols/2)][Math.round(rows/2)];
+    requiredsteps[2] = gamemap.grid[Math.round(cols*3/4)][Math.round(rows*1/4)];
+    requiredsteps[3] = gamemap.grid[cols - 1][rows - 1];
 
-    pathfinder = new AStarPathFinder(gamemap, start, end, allowDiagonals);
+    for(var i = 0; i < requiredsteps.length; i++){
+        requiredsteps[i].wall = false;
+    }
+
+    for(i = 0; i < requiredsteps.length-1; i++){
+        pathfinder[i] = new AStarPathFinder(gamemap, requiredsteps[i], requiredsteps[i+1], allowDiagonals);
+    }
+    // start.wall = false;
+    // middle.wall = false;
+    // end.wall = false;
+
+    // pathfinder[0] = new AStarPathFinder(gamemap, start, middle, allowDiagonals);
+    // pathfinder[1] = new AStarPathFinder(gamemap, middle, end, allowDiagonals);
+
 }
 
 function setup() {
@@ -205,10 +220,12 @@ function setup() {
     recordTime("Setup");
 }
 
-function searchStep() {
+function searchStep(index) {
+   
     if (!paused || stepsAllowed > 0) {
+
         startTime();
-        var result = pathfinder.step();
+        var result = pathfinder[index].step();
         recordTime("AStar Iteration");
         stepsAllowed--;
 
@@ -227,12 +244,14 @@ function searchStep() {
                 status = "Still Searching"
                 break;
         }
+        
     }
 }
 
 var mapGraphic = null;
 
 function drawMap() {
+
     if (mapGraphic == null) {
         for (var i = 0; i < gamemap.cols; i++) {
             for (var j = 0; j < gamemap.rows; j++) {
@@ -248,47 +267,49 @@ function drawMap() {
 }
 
 function draw() {
-
-    searchStep();
-
-    // Draw current state of everything
+    var path = [];
     background(255);
-
     doGUI();
-
     text("Search status - " + status, 10, 450);
-
-    startTime();
-
     drawMap();
+    
+    for (var index = 0; index < pathfinder.length; index++) {
+        searchStep(index);
 
-    for (var i = 0; i < pathfinder.closedSet.length; i++) {
-        pathfinder.closedSet[i].show(color(255, 0, 0, 50));
-    }
+        // Draw current state of everything
+        
+        startTime();
 
-    var infoNode = null;
+        
+        for (var i = 0; i < pathfinder[index].closedSet.length; i++) {
+            pathfinder[index].closedSet[i].show(color(255, 0, 0, 50));
 
-    for (var i = 0; i < pathfinder.openSet.length; i++) {
-        var node = pathfinder.openSet[i];
-        node.show(color(0, 255, 0, 50));
-        if (mouseX > node.x && mouseX < node.x + node.width &&
-            mouseY > node.y && mouseY < node.y + node.height) {
-            infoNode = node;
         }
+
+        var infoNode = null;
+
+        for (var i = 0; i < pathfinder[index].openSet.length; i++) {
+            var node = pathfinder[index].openSet[i];
+            node.show(color(0, 255, 0, 50));
+            if (mouseX > node.x && mouseX < node.x + node.width &&
+                mouseY > node.y && mouseY < node.y + node.height) {
+                infoNode = node;
+            }
+        }
+        recordTime("Draw Grid");
+
+        fill(0);
+        if (infoNode != null) {
+            text("f = " + infoNode.f, 430, 230);
+            text("g = " + infoNode.g, 430, 250);
+            text("h = " + infoNode.h, 430, 270);
+            text("vh = " + infoNode.vh, 430, 290);
+
+        }
+        
+        path[index] = calcPath(pathfinder[index].lastCheckedNode);
+        drawPath(path[index]);
     }
-    recordTime("Draw Grid");
-
-    fill(0);
-    if (infoNode != null) {
-        text("f = " + infoNode.f, 430, 230);
-        text("g = " + infoNode.g, 430, 250);
-        text("h = " + infoNode.h, 430, 270);
-        text("vh = " + infoNode.vh, 430, 290);
-
-    }
-
-    var path = calcPath(pathfinder.lastCheckedNode);
-    drawPath(path);
 }
 
 function calcPath(endNode) {
@@ -300,7 +321,9 @@ function calcPath(endNode) {
     while (temp.previous) {
         path.push(temp.previous);
         temp = temp.previous;
+    
     }
+    console.log(path.length);
     recordTime("Calc Path");
     return path
 }
